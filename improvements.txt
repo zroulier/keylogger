@@ -2,4 +2,8 @@
 - Make it smarter, if something ends in enter store it, like urls, and more rules
 -*** Create a pop-up window that shows live session stats, which auto update every 5 seconds
 - Create a sophisticated trends sheet using matplotlib and other libraries
-- Add .json file to .gitignore
+- Create a variable to change background refresh rate
+- Restructure app so that gui and functions are separate *** CURRENT TASK ***
+
+- Create a settings gui:
+    - Make the app appearance dynamic for light, dark, and system

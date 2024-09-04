@@ -1,6 +1,7 @@
 import json
 import os
 import csv
+import webbrowser
 from pynput.keyboard import Key, Listener
 import customtkinter as ctk
 import string
@@ -19,12 +20,19 @@ word_buffer = []  # To store consecutive letters
 valid_words = set(words.words())  # A set of dictionary words for checking typed words
 filename = 'key_log_counts.json'
 keystroke_data = {}
+session_log = {  # For tracking keys pressed since "Start Logging"
+    "letters": {},
+    "numbers": {},
+    "other": {},
+    "words": {}
+}
 listener = None  # Global reference to the key listener
 is_logging = False  # To track if logging is active
 running_text_job = None  # To store the reference to the 'after' job
 running_text_index = 0  # To track the state of "Running..." animation
 live_stats_popup = None
 live_stats_label_popup = None
+running_live_stats_job = None
 
 def load_existing_data():
     """Load existing key log data from the JSON file."""
@@ -37,6 +45,45 @@ def load_existing_data():
             keystroke_data = {}
     else:
         keystroke_data = {}
+
+def quick_view_json():
+    """Open the JSON file using Firefox, then Chrome, or as a fallback, Notepad."""
+    file_path = os.path.abspath(filename)  # Ensure the file path is absolute
+    try:
+        # Try to open in Firefox
+        firefox_path = None
+        if platform.system() == "Windows": # Windows
+            firefox_path = "C:/Program Files/Mozilla Firefox/firefox.exe"
+        elif platform.system() == "Darwin":  # macOS
+            firefox_path = "/Applications/Firefox.app/Contents/MacOS/firefox"
+        elif platform.system() == "Linux": # Linux
+            firefox_path = "/usr/bin/firefox"
+
+        if firefox_path and os.path.exists(firefox_path):
+            subprocess.Popen([firefox_path, file_path])
+            return
+
+        # If Firefox is not available, try Chrome
+        chrome_path = None
+        if platform.system() == "Windows":
+            chrome_path = "C:/Program Files/Google/Chrome/Application/chrome.exe"
+        elif platform.system() == "Darwin":
+            chrome_path = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+        elif platform.system() == "Linux":
+            chrome_path = "/usr/bin/google-chrome"
+
+        if chrome_path and os.path.exists(chrome_path):
+            subprocess.Popen([chrome_path, file_path])
+            return
+
+        # If neither browser is available, open in Notepad (Windows only)
+        if platform.system() == "Windows":
+            subprocess.Popen(["notepad", file_path])
+        else:
+            print("Unable to open the file. No supported browser found, and Notepad is Windows-only.")
+
+    except Exception as e:
+        print(f"Failed to open the file: {e}")
 
 def save_to_json():
     """Save the key log data to a structured JSON format."""
@@ -64,7 +111,6 @@ def save_to_json():
     with open(filename, 'w') as f:
         json.dump(structured_data, f, indent=4)
     print(f"Keylogger updated to {filename}")
-
 
 # Modify the merge_logs function to use the new structure
 def merge_logs():
@@ -99,7 +145,6 @@ def merge_logs():
     # Save the updated keystroke data
     save_to_json()
 
-
 def start_logging():
     """Start listening for key presses."""
     global listener, is_logging
@@ -121,10 +166,9 @@ def stop_logging():
             app.after_cancel(periodic_save_job)
             periodic_save_job = None
 
-
 def on_press(key):
     """Handle key press event."""
-    global key_log, word_buffer
+    global key_log, word_buffer, session_log
     key_str = None
     try:
         key_str = key.char  # For alphanumeric keys
@@ -137,46 +181,23 @@ def on_press(key):
     else:
         key_log[key_str] = 1
 
+    # Track keys in session_log as well
+    if key_str.isalpha():  # It's a letter
+        session_log['letters'][key_str] = session_log['letters'].get(key_str, 0) + 1
+    elif key_str.isdigit():  # It's a number
+        session_log['numbers'][key_str] = session_log['numbers'].get(key_str, 0) + 1
+    else:  # It's a special key (other)
+        session_log['other'][key_str] = session_log['other'].get(key_str, 0) + 1
+
     # Track consecutive letters (words) and store valid ones
     if key_str and key_str in string.ascii_letters:  # If the key is a letter
         word_buffer.append(key_str)
     elif key_str == ' ' or key == Key.space:  # When space is pressed, check the word
         check_and_store_word()
 
-    # Update the key count in keystroke_data dynamically
-    if key_str.isalpha():  # It's a letter
-        if key_str in keystroke_data.get('letters', {}):
-            keystroke_data['letters'][key_str] += 1
-        else:
-            if 'letters' not in keystroke_data:
-                keystroke_data['letters'] = {}
-            keystroke_data['letters'][key_str] = 1
-    elif key_str.isdigit():  # It's a number
-        if key_str in keystroke_data.get('numbers', {}):
-            keystroke_data['numbers'][key_str] += 1
-        else:
-            if 'numbers' not in keystroke_data:
-                keystroke_data['numbers'] = {}
-            keystroke_data['numbers'][key_str] = 1
-    else:  # It's a special key (other)
-        if key_str in keystroke_data.get('other', {}):
-            keystroke_data['other'][key_str] += 1
-        else:
-            if 'other' not in keystroke_data:
-                keystroke_data['other'] = {}
-            keystroke_data['other'][key_str] = 1
-
-
-def on_release(key):
-    """Handle key release event."""
-    if key == Key.esc:
-        stop_logging()
-        stop_running_text()  # Stop the animation when the logger stops
-        return False  # Stop listener when ESC is pressed
-
 def check_and_store_word():
     """Check if the letters in the buffer form a valid word and store it."""
-    global word_buffer, keystroke_data
+    global word_buffer, keystroke_data, session_log
     word = ''.join(word_buffer).lower()
     if word in valid_words:
         if 'words' not in keystroke_data:
@@ -185,69 +206,99 @@ def check_and_store_word():
             keystroke_data['words'][word] += 1
         else:
             keystroke_data['words'][word] = 1
+
+        # Track words in session_log as well
+        session_log['words'][word] = session_log['words'].get(word, 0) + 1
+
     word_buffer = []  # Reset buffer after checking
 
-def get_stats():
-    """Get the current keystroke stats (number of key presses for each key)."""
-    return keystroke_data
-
-def get_trends():
-    """Display the keystroke trends in a readable format."""
-    trend = "\n".join([f"{key}: {count}" for key, count in keystroke_data.items() if key != 'total' and key != 'words'])
-    word_trend = "\n".join([f"{word}: {count}" for word, count in keystroke_data.get('words', {}).items()])
-    return f"{trend}\nWords:\n{word_trend}\nTotal: {keystroke_data.get('total', 0)}"
+def on_release(key):
+    """Handle key release event."""
+    if key == Key.esc:
+        stop_logging()
+        stop_running_text()  # Stop the animation when the logger stops
+        return False  # Stop listener when ESC is pressed
 
 def reset_data():
     """Clear all keystroke data (current session and stored data)."""
-    global key_log, keystroke_data, word_buffer
+    global key_log, keystroke_data, word_buffer, session_log
     key_log = {}
     keystroke_data = {}
+    session_log = {
+        "letters": {},
+        "numbers": {},
+        "other": {},
+        "words": {}
+    }
     word_buffer = []
     save_to_json()
 
-# Function to update the "Running. .. ..." label
 def update_running_text():
+    """Update the 'Running...' label periodically."""
     global running_text_index, running_text_job
     running_states = ["Running.", "Running..", "Running..."]
     running_text_index = (running_text_index + 1) % 3
     running_label.configure(text=running_states[running_text_index])
-    # Update the label every 500 milliseconds
     running_text_job = app.after(500, update_running_text)
 
 def stop_running_text():
     """Stop the running text animation."""
     global running_text_job
     if running_text_job is not None:
-        app.after_cancel(running_text_job)  # Stop the cyclic updating
+        app.after_cancel(running_text_job)
         running_text_job = None
-    running_label.configure(text="")  # Clear the running label when logging stops
+    running_label.configure(text="")
 
-### Quick View Function ###
-def quick_view_json():
-    """Open the existing JSON file for quick viewing."""
-    if os.path.exists(filename):
-        # Open the JSON file on the local machine
-        open_file(filename)
-    else:
-        print(f"File {filename} does not exist!")
+def periodic_save_json():
+    """Periodically save key log data to JSON to prevent data loss."""
+    global periodic_save_job
+    save_to_json()
+    periodic_save_job = app.after(5000, periodic_save_json)
 
-def open_file(filepath):
-    """Open a file on the local machine."""
-    if platform.system() == 'Windows':
-        os.startfile(filepath)
-    elif platform.system() == 'Darwin':  # macOS
-        subprocess.Popen(['open', filepath])
-    else:  # Linux
-        subprocess.Popen(['xdg-open', filepath])
+def show_live_stats():
+    """Display live session stats in a new pop-up window and update it every 5 seconds."""
+    global live_stats_popup, live_stats_label_popup, running_live_stats_job
 
-### Popup for Export Options with Quick View ###
+    if not live_stats_popup or not live_stats_popup.winfo_exists():
+        live_stats_popup = ctk.CTkToplevel(app)
+        live_stats_popup.geometry("400x500")
+        live_stats_popup.title("Live Session Stats")
+
+        live_stats_label_popup = ctk.CTkLabel(live_stats_popup, text="", text_color='white', font=("Open Sans", 14), justify='left', anchor='w', wraplength=380)
+        live_stats_label_popup.pack(pady=20)
+
+        live_stats_popup.protocol("WM_DELETE_WINDOW", stop_live_stats_update)
+
+    # Construct table-like output from session_log
+    live_stats_text = "Key: Count\n"
+    live_stats_text += "\n".join([f"{key}: {count}" for key, count in session_log.get("letters", {}).items()])
+    live_stats_text += "\n\nNumbers:\n"
+    live_stats_text += "\n".join([f"{key}: {count}" for key, count in session_log.get("numbers", {}).items()])
+    live_stats_text += "\n\nOther Keys:\n"
+    live_stats_text += "\n".join([f"{key}: {count}" for key, count in session_log.get("other", {}).items()])
+    live_stats_text += "\n\nWords:\n"
+    live_stats_text += "\n".join([f"{word}: {count}" for word, count in session_log.get("words", {}).items()])
+
+    live_stats_label_popup.configure(text=live_stats_text)
+    running_live_stats_job = app.after(5000, show_live_stats)
+
+def stop_live_stats_update():
+    """Stop live session stats update and close the pop-up window."""
+    global running_live_stats_job, live_stats_popup
+    if running_live_stats_job:
+        app.after_cancel(running_live_stats_job)
+        running_live_stats_job = None
+
+    if live_stats_popup:
+        live_stats_popup.destroy()
+        live_stats_popup = None
+
 def export_popup():
     """Display a popup with options to download CSV, JSON, or Quick View JSON."""
     popup = ctk.CTkToplevel(app)
     popup.geometry("300x200")
     popup.title("Export Options")
     
-    # Make sure popup has focus and stays on top
     popup.lift()
     popup.focus_force()
     popup.grab_set()  # Modal dialog behavior
@@ -255,19 +306,15 @@ def export_popup():
     label = ctk.CTkLabel(popup, text="Choose an option to export data", font=("Open Sans", 16, 'bold'))
     label.pack(pady=10)
 
-    # Button to save CSV
     csv_button = ctk.CTkButton(popup, text="Download CSV", command=lambda: [save_csv(), popup.destroy()])
     csv_button.pack(pady=5)
 
-    # Button to save JSON
     json_button = ctk.CTkButton(popup, text="Download JSON", command=lambda: [save_json(), popup.destroy()])
     json_button.pack(pady=5)
 
-    # Button for Quick View
     quick_view_button = ctk.CTkButton(popup, text="Developer View", command=lambda: [quick_view_json(), popup.destroy()])
     quick_view_button.pack(pady=5)
 
-### Save JSON ###
 def save_json():
     """Save JSON data to a user-specified file location with a default file name."""
     file_path = filedialog.asksaveasfilename(
@@ -280,7 +327,6 @@ def save_json():
             json.dump(keystroke_data, json_file, indent=4)
         print(f"JSON saved at {file_path}")
 
-### Save CSV ###
 def save_csv():
     """Convert JSON data to CSV and save to a user-specified file location with a default file name."""
     file_path = filedialog.asksaveasfilename(
@@ -295,7 +341,6 @@ def save_csv():
         csv_writer = csv.writer(csv_file)
         csv_writer.writerow(['Key/Word', 'Count'])  # Header
 
-        # Write keys and counts
         for key, value in keystroke_data.items():
             if key == 'words':
                 for word, count in value.items():
@@ -304,112 +349,58 @@ def save_csv():
                 csv_writer.writerow([key, value])
         print(f"CSV saved at {file_path}")
 
-### Confirmation Dialog for Reset ###
 def confirm_reset():
-    # Create a toplevel window for confirmation
+    """Create a confirmation dialog to reset the keystroke data."""
     confirm_window = ctk.CTkToplevel(app)
     confirm_window.geometry("300x150")
     confirm_window.title("Confirm Reset")
-    confirm_window.lift()  # Bring the window to the front
+    confirm_window.lift()
     confirm_window.focus_force()
-    confirm_window.grab_set()  # Force focus on this window
+    confirm_window.grab_set()
 
     label = ctk.CTkLabel(confirm_window, text="This will delete ALL history of keystrokes. Are you sure you want to continue?", wraplength=175, font=('Open Sans', 16, 'bold'))
     label.pack(pady=10)
 
-    # Yes button
     yes_button = ctk.CTkButton(confirm_window, text="Yes", fg_color='#FF4C4C', command=lambda: reset_and_close(confirm_window))
     yes_button.pack(side="left", padx=10, pady=10)
 
-    # No button
     no_button = ctk.CTkButton(confirm_window, text="No", fg_color='#4C9FFF', command=confirm_window.destroy)
     no_button.pack(side="right", padx=10, pady=10)
 
 def reset_and_close(window):
     """Reset the data and close the confirmation window."""
-    reset_data()  # Reset the data
-    window.destroy()  # Close the confirmation window
-    stats_label.configure(text="Data reset successfully.")  # Update the main label
+    reset_data()
+    window.destroy()
+    stats_label.configure(text="Data reset successfully.")
 
-periodic_save_job = None  # Global variable to store the job reference for periodic save
-
-def periodic_save_json():
-    """Periodically save key log data to JSON to prevent data loss."""
-    global periodic_save_job
-    save_to_json()  # Save the data to JSON
-    periodic_save_job = app.after(5000, periodic_save_json)  # Call this function every 5 seconds (5000 ms)
-
-def show_live_stats():
-    """Display live session stats in a new pop-up window and update it every 5 seconds."""
-    global live_stats_popup, live_stats_label_popup, running_live_stats_job
-
-    # Create a pop-up window if it doesn't exist or is closed
-    if not live_stats_popup or not live_stats_popup.winfo_exists():
-        live_stats_popup = ctk.CTkToplevel(app)
-        live_stats_popup.geometry("400x500")
-        live_stats_popup.title("Live Session Stats")
-
-        live_stats_label_popup = ctk.CTkLabel(live_stats_popup, text="", text_color='white', font=("Open Sans", 14), justify='left', anchor='w', wraplength=380)
-        live_stats_label_popup.pack(pady=20)
-
-        # Close popup handling
-        live_stats_popup.protocol("WM_DELETE_WINDOW", stop_live_stats_update)
-
-    # Load the most recent data from the JSON file
-    if os.path.exists(filename):
-        with open(filename, 'r') as f:
-            latest_data = json.load(f)
-
-        # Construct table-like output with keys, numbers, and other counts
-        live_stats_text = "Key: Count\n"
-        live_stats_text += "\n".join([f"{key}: {count}" for key, count in latest_data.get("letters", {}).items()])
-        live_stats_text += "\n\nNumbers:\n"
-        live_stats_text += "\n".join([f"{key}: {count}" for key, count in latest_data.get("numbers", {}).items()])
-        live_stats_text += "\n\nOther Keys:\n"
-        live_stats_text += "\n".join([f"{key}: {count}" for key, count in latest_data.get("other", {}).items()])
-        live_stats_text += "\n\nWords:\n"
-        live_stats_text += "\n".join([f"{word}: {count}" for word, count in latest_data.get("words", {}).items()])
-
-        # Update the label with the live stats
-        live_stats_label_popup.configure(text=live_stats_text)
-
-    # Schedule the next update in 5 seconds (5000 ms)
-    running_live_stats_job = app.after(5000, show_live_stats)
-
-def stop_live_stats_update():
-    """Stop the live session stats update and close the pop-up."""
-    global running_live_stats_job, live_stats_popup
-    if running_live_stats_job:
-        app.after_cancel(running_live_stats_job)
-        running_live_stats_job = None
-
-    # Close the live stats popup if it exists
-    if live_stats_popup:
-        live_stats_popup.destroy()
-        live_stats_popup = None
-
-### CustomTkinter Example without Class ###
 def start_logging_event():
-    global key_log
-    key_log = {}  # Initialize key_log at the start of each session to avoid overwriting old data
+    """Start logging keystrokes and reset session log."""
+    global key_log, session_log
+    key_log = {}
+    session_log = {
+        "letters": {},
+        "numbers": {},
+        "other": {},
+        "words": {}
+    }
     stats_label.configure(text="Logging keystrokes... Press ESC to stop.")
     start_logging()
-    update_running_text()  # Start the animation when the logger starts
-    periodic_save_json()  # Start periodic saving
-
-
+    update_running_text()
+    periodic_save_json()
 
 def stop_logging_event():
+    """Stop logging keystrokes."""
     stop_logging()
     stats_label.configure(text="Keystrokes saved! Click 'Show Trends' to see the stats.")
-    stop_running_text()  # Stop the animation when logging stops
+    stop_running_text()
 
 def show_trends_event():
+    """Display trends for the session."""
     trends = get_trends()
     stats_label.configure(text=f"Keystroke Trends:\n{trends}")
 
-ctk.set_appearance_mode('dark')
 # Main Application using CustomTkinter
+ctk.set_appearance_mode('dark')
 app = ctk.CTk()
 app.geometry('500x630')
 app.resizable(False, False)
@@ -418,52 +409,30 @@ app.resizable(False, False)
 load_existing_data()
 
 # Green label to show running status
-running_label = ctk.CTkLabel(
-    app,
-    text="",
-    text_color='green',
-    font=("Open Sans", 14))
+running_label = ctk.CTkLabel(app, text="", text_color='green', font=("Open Sans", 14))
 running_label.pack(pady=10)
 
 # UI Elements
-app_title = ctk.CTkLabel(
-    app,
-    text="Keystroke Logger Tool",
-    text_color='white',
-    font=("Open Sans", 35,'bold'))
+app_title = ctk.CTkLabel(app, text="Keystroke Logger Tool", text_color='white', font=("Open Sans", 35, 'bold'))
 app_title.pack(pady=(0,0), anchor='n')
 
-app_desc = ctk.CTkLabel(
-    app,
-    text="Click the 'Start Logging' button below to begin the program. Minimize the window and let it run in the back",
-    text_color='white',
-    font=("Open Sans", 18),
-    width=350, wraplength=350)
+app_desc = ctk.CTkLabel(app, text="Click the 'Start Logging' button below to begin the program. Minimize the window and let it run in the back", text_color='white', font=("Open Sans", 18), width=350, wraplength=350)
 app_desc.pack(pady=(20,0))
 
-stats_label = ctk.CTkLabel(
-    app,
-    text="",
-    text_color='white',
-    font=("Open Sans", 18, 'bold'),
-    wraplength=500)
+stats_label = ctk.CTkLabel(app, text="", text_color='white', font=("Open Sans", 18, 'bold'), wraplength=500)
 stats_label.pack(pady=20)
 
 # Start and Stop Button Frame
-
 start_frame = ctk.CTkFrame(app, fg_color="#242424")
 start_frame.pack(pady=10, anchor='center')
 
 trends_frame = ctk.CTkFrame(app, fg_color="#242424")
 trends_frame.pack(pady=(0, 0), fill='x', expand=True)
 
-# Live Session Stats Label
-live_stats_label = ctk.CTkLabel(app, text="", text_color='white', font=("Open Sans", 14), justify='left', anchor='w', wraplength=400)
-live_stats_label.pack(pady=10)
-
 bottom_frame = ctk.CTkFrame(app, fg_color="#242424")
 bottom_frame.pack(pady=0, fill='x', expand=True)
 
+# Buttons for Start/Stop/Trends/Live Session Stats
 start_button = ctk.CTkButton(start_frame, text="Start Logging", fg_color='#4C9FFF', font=('Open Sans Bold', 20), text_color='white', width=200, height=100, command=start_logging_event)
 start_button.pack(side='left', pady=10)
 
@@ -479,7 +448,6 @@ live_stats_button.pack(pady=(10, 0), anchor='center')
 reset_button = ctk.CTkButton(bottom_frame, text="Reset Data", fg_color='#FF4C4C', font=('Open Sans Bold', 16, 'bold'), text_color='white', width=50, height=40, command=confirm_reset)
 reset_button.pack(side='right')
 
-# Add a Button to Export and Choose Format
 export_button = ctk.CTkButton(bottom_frame, text="Export Data", fg_color='#228b22', font=('Open Sans Bold', 16, 'bold'), text_color='white', width=50, height=40, command=export_popup)
 export_button.pack(side='left')
 
