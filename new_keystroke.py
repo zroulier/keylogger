@@ -23,6 +23,8 @@ listener = None  # Global reference to the key listener
 is_logging = False  # To track if logging is active
 running_text_job = None  # To store the reference to the 'after' job
 running_text_index = 0  # To track the state of "Running..." animation
+live_stats_popup = None
+live_stats_label_popup = None
 
 def load_existing_data():
     """Load existing key log data from the JSON file."""
@@ -337,6 +339,54 @@ def periodic_save_json():
     save_to_json()  # Save the data to JSON
     periodic_save_job = app.after(5000, periodic_save_json)  # Call this function every 5 seconds (5000 ms)
 
+def show_live_stats():
+    """Display live session stats in a new pop-up window and update it every 5 seconds."""
+    global live_stats_popup, live_stats_label_popup, running_live_stats_job
+
+    # Create a pop-up window if it doesn't exist or is closed
+    if not live_stats_popup or not live_stats_popup.winfo_exists():
+        live_stats_popup = ctk.CTkToplevel(app)
+        live_stats_popup.geometry("400x500")
+        live_stats_popup.title("Live Session Stats")
+
+        live_stats_label_popup = ctk.CTkLabel(live_stats_popup, text="", text_color='white', font=("Open Sans", 14), justify='left', anchor='w', wraplength=380)
+        live_stats_label_popup.pack(pady=20)
+
+        # Close popup handling
+        live_stats_popup.protocol("WM_DELETE_WINDOW", stop_live_stats_update)
+
+    # Load the most recent data from the JSON file
+    if os.path.exists(filename):
+        with open(filename, 'r') as f:
+            latest_data = json.load(f)
+
+        # Construct table-like output with keys, numbers, and other counts
+        live_stats_text = "Key: Count\n"
+        live_stats_text += "\n".join([f"{key}: {count}" for key, count in latest_data.get("letters", {}).items()])
+        live_stats_text += "\n\nNumbers:\n"
+        live_stats_text += "\n".join([f"{key}: {count}" for key, count in latest_data.get("numbers", {}).items()])
+        live_stats_text += "\n\nOther Keys:\n"
+        live_stats_text += "\n".join([f"{key}: {count}" for key, count in latest_data.get("other", {}).items()])
+        live_stats_text += "\n\nWords:\n"
+        live_stats_text += "\n".join([f"{word}: {count}" for word, count in latest_data.get("words", {}).items()])
+
+        # Update the label with the live stats
+        live_stats_label_popup.configure(text=live_stats_text)
+
+    # Schedule the next update in 5 seconds (5000 ms)
+    running_live_stats_job = app.after(5000, show_live_stats)
+
+def stop_live_stats_update():
+    """Stop the live session stats update and close the pop-up."""
+    global running_live_stats_job, live_stats_popup
+    if running_live_stats_job:
+        app.after_cancel(running_live_stats_job)
+        running_live_stats_job = None
+
+    # Close the live stats popup if it exists
+    if live_stats_popup:
+        live_stats_popup.destroy()
+        live_stats_popup = None
 
 ### CustomTkinter Example without Class ###
 def start_logging_event():
@@ -405,7 +455,11 @@ start_frame = ctk.CTkFrame(app, fg_color="#242424")
 start_frame.pack(pady=10, anchor='center')
 
 trends_frame = ctk.CTkFrame(app, fg_color="#242424")
-trends_frame.pack(pady=(0, 125), fill='x', expand=True)
+trends_frame.pack(pady=(0, 0), fill='x', expand=True)
+
+# Live Session Stats Label
+live_stats_label = ctk.CTkLabel(app, text="", text_color='white', font=("Open Sans", 14), justify='left', anchor='w', wraplength=400)
+live_stats_label.pack(pady=10)
 
 bottom_frame = ctk.CTkFrame(app, fg_color="#242424")
 bottom_frame.pack(pady=0, fill='x', expand=True)
@@ -418,6 +472,9 @@ stop_button.pack(side='left', padx=10)
 
 trends_button = ctk.CTkButton(trends_frame, text="Show Trends", fg_color='#4C9FFF', font=('Open Sans Bold', 20), text_color='white', width=410, height=70, command=show_trends_event)
 trends_button.pack(pady=(0, 0), anchor='center')
+
+live_stats_button = ctk.CTkButton(trends_frame, text="Live Session Stats", fg_color='#4C9FFF', font=('Open Sans Bold', 20), text_color='white', width=410, height=70, command=show_live_stats)
+live_stats_button.pack(pady=(10, 0), anchor='center')
 
 reset_button = ctk.CTkButton(bottom_frame, text="Reset Data", fg_color='#FF4C4C', font=('Open Sans Bold', 16, 'bold'), text_color='white', width=50, height=40, command=confirm_reset)
 reset_button.pack(side='right')
