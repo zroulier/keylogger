@@ -1,3 +1,4 @@
-Create a button that closes the gui but keeps the program running (certain key to bring it back up)
-
-make it smarter, if something ends it enter store it, like urls, and more rules
+- Create a button that closes the gui but keeps the program running (certain key to bring it back up)
+- Make it smarter, if something ends it enter store it, like urls, and more rules
+- Create a pop-up window that shows live session stats, which auto update every 5 seconds
+- Create a sophisticated trends sheet using matplotlib and other libraries

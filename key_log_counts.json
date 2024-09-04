@@ -1,0 +1,26 @@
+{
+    "total": {
+        "total_keys": 82,
+        "total_words": 2
+    },
+    "letters": {
+        "g": 12,
+        "f": 16,
+        "d": 14,
+        "h": 16,
+        "e": 4,
+        "l": 4,
+        "o": 2,
+        "s": 2,
+        "b": 2,
+        "y": 2
+    },
+    "numbers": {},
+    "other": {
+        "Key.space": 8
+    },
+    "words": {
+        "hello": 1,
+        "bye": 1
+    }
+}
