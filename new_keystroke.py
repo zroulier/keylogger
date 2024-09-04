@@ -61,7 +61,7 @@ def save_to_json():
     # Save the restructured data to the JSON file
     with open(filename, 'w') as f:
         json.dump(structured_data, f, indent=4)
-    print(f"Keystroke counts saved to {filename} in restructured format")
+    print(f"Keylogger updated to {filename}")
 
 
 # Modify the merge_logs function to use the new structure
