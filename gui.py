@@ -30,6 +30,12 @@ def start_logging():
 def stop_logging():
     keylogger_app.stop_logging_event(running_label, time_elapsed_label, app)
 
+def run_in_background():
+    app.withdraw()
+
+# Start the hotkey listener to reopen the window
+keylogger_app.start_hotkey_listener(app)
+
 # def show_trends():
 #     keylogger_app.show_trends_event()
 
@@ -140,6 +146,28 @@ live_stats_button = ctk.CTkButton(
     command=lambda: keylogger_app.show_live_stats(app))
 live_stats_button.pack(anchor='center')
 
+export_button = ctk.CTkButton(
+    bottom_frame, 
+    text="Export Data", 
+    fg_color='#228b22', 
+    font=('Open Sans Bold', 16, 'bold'), 
+    text_color='white', 
+    width=50, 
+    height=40, 
+    command=lambda: keylogger_app.export_popup(app))
+export_button.pack(side='left')
+
+run_in_background_button = ctk.CTkButton(
+    bottom_frame,
+    text='Run in Background',
+    fg_color='#ffa500',
+    font=("Open Sans Bold", 16, 'bold'),
+    text_color='white',
+    width=280,
+    height=40,
+    command=run_in_background
+)
+run_in_background_button.pack(side='left', padx=10)
 
 reset_button = ctk.CTkButton(
     bottom_frame, 
@@ -151,17 +179,6 @@ reset_button = ctk.CTkButton(
     height=40, 
     command=lambda: keylogger_app.confirm_reset(app))
 reset_button.pack(side='right')
-
-export_button = ctk.CTkButton(
-    bottom_frame, 
-    text="Export Data", 
-    fg_color='#228b22', 
-    font=('Open Sans Bold', 16, 'bold'), 
-    text_color='white', 
-    width=50, 
-    height=40, 
-    command=lambda: keylogger_app.export_popup(app))
-export_button.pack(side='left')
 
 # Run Application
 app.mainloop()

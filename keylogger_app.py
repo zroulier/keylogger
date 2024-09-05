@@ -2,7 +2,8 @@ import json
 import os
 import csv
 import webbrowser
-from pynput.keyboard import Key, Listener
+from pynput.keyboard import Key, Listener, Controller
+from pynput import keyboard
 import string
 import nltk
 from nltk.corpus import words
@@ -39,6 +40,39 @@ class KeyloggerApp:
         self.start_time = None
         self.time_elapsed_label = None
         self.stopwatch_running = False
+        self.hotkey_listener = None
+        self.key_controller = Controller()
+
+
+    def start_hotkey_listener(self, app):
+        """Start a listener to capture the Ctrl+Shift+P key combo and toggle the window."""
+        def on_activate():
+            if app.state() == 'withdrawn':
+                print("Ctrl+Shift+P pressed - Showing the app window")
+                app.deiconify()  # Show the app window again
+            else:
+                print("Ctrl+Shift+P pressed - Hiding the app window")
+                app.withdraw()  # Hide the app window
+
+        # Define the hotkey (Ctrl+Shift+P)
+        hotkey = keyboard.HotKey(
+            keyboard.HotKey.parse('<ctrl>+<shift>+p'),
+            on_activate
+        )
+
+        def for_canonical(f):
+            return lambda k: f(self.hotkey_listener.canonical(k))
+
+        # Create and start the keyboard listener
+        self.hotkey_listener = keyboard.Listener(
+            on_press=for_canonical(hotkey.press),
+            on_release=for_canonical(hotkey.release)
+        )
+        self.hotkey_listener.start()
+
+    def stop_hotkey_listener(self):
+        if self.hotkey_listener:
+            self.hotkey_listener.stop()
 
     def load_existing_data(self):
         if os.path.exists(self.filename):
@@ -217,8 +251,7 @@ class KeyloggerApp:
         self.save_to_json()
 
     def update_running_text(self, running_label, app):
-        """Update the 'Running...' label periodically."""
-        running_states = ["Running. | Press ESC Key to Stop", "Running.. | Press ESC Key to Stop", "Running... | Press ESC Key to Stop"]
+        running_states = ["Running. | Press Ctrl+Shift+P to Toggle Window", "Running.. | Press Ctrl+Shift+P to Toggle Window", "Running... | Press Ctrl+Shift+P to Toggle Window"]
         self.running_text_index = (self.running_text_index + 1) % 3
         running_label.configure(text=running_states[self.running_text_index])
         self.running_text_job = app.after(1000, lambda: self.update_running_text(running_label, app))
@@ -375,7 +408,7 @@ class KeyloggerApp:
 
     def reset_and_close(self, window):
         self.reset_data()
-        messagebox.showinfo("Confirmation", "Your data has been erased successfully. This action cannot be undone")
+        messagebox.showinfo("Confirmation", "Your data has been erased successfully.")
         window.destroy()
 
     def start_logging_event(self, running_label, time_elapsed_label, app):
