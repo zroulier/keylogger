@@ -226,8 +226,13 @@ class KeyloggerApp:
                     self.keystroke_data['other'] = {}
                 self.keystroke_data['other'][key] = self.keystroke_data['other'].get(key, 0) + value
 
-        # Words should only be merged once after they are fully typed
-        # Do not merge words during periodic save
+        # Merge word counts and increment the total words count
+        for word, count in self.session_log['words'].items():
+            if 'words' not in self.keystroke_data:
+                self.keystroke_data['words'] = {}
+            self.keystroke_data['words'][word] = self.keystroke_data['words'].get(word, 0) + count
+
+        # Clear session logs after merging
         self.key_log = {}
         self.session_log = {
             "letters": {},
@@ -236,7 +241,9 @@ class KeyloggerApp:
             "words": {}
         }
 
+        # Save the updated keystroke data to JSON
         self.save_to_json()
+
 
 
     def start_logging(self):
@@ -285,7 +292,7 @@ class KeyloggerApp:
         """Check if the letters in the buffer form a valid word and store it."""
         word = ''.join(self.word_buffer).lower()
         
-        # Only process the word if it's not empty
+        # Only process the word if it's not empty and valid
         if word and word in self.valid_words:
             if 'words' not in self.keystroke_data:
                 self.keystroke_data['words'] = {}
@@ -294,13 +301,14 @@ class KeyloggerApp:
             self.keystroke_data['words'][word] = self.keystroke_data['words'].get(word, 0) + 1
             self.session_log['words'][word] = self.session_log['words'].get(word, 0) + 1
 
-            # Increment total word count
+            # Increment total word count (preserve between sessions)
             if 'total_words_count' not in self.keystroke_data:
                 self.keystroke_data['total_words_count'] = 0
             self.keystroke_data['total_words_count'] += 1
 
-        # Clear the buffer after processing to prevent double counting
+        # Clear the buffer after processing to avoid counting the same word again
         self.word_buffer = []
+
 
 
     def on_release(self, key):
@@ -484,7 +492,12 @@ class KeyloggerApp:
         window.destroy()
 
     def start_logging_event(self, running_label, time_elapsed_label, app):
-        """Start logging keystrokes and reset session log."""
+        """Start logging keystrokes and reset only the session log."""
+        
+        # Load the existing cumulative keystroke data from JSON
+        self.load_existing_data()
+
+        # Clear the session log (but not the cumulative data)
         self.key_log = {}
         self.session_log = {
             "letters": {},
@@ -492,10 +505,14 @@ class KeyloggerApp:
             "other": {},
             "words": {}
         }
+
+        # Start logging, update UI, and start periodic saving
         self.start_logging()
         self.update_running_text(running_label, app)
         self.start_stopwatch(time_elapsed_label)
-        self.periodic_save_json(app)  # Start periodic saving
+        self.periodic_save_json(app)
+
+
 
     def stop_logging_event(self, running_label, time_elapsed_label, app):
         """Stop logging keystrokes and cancel the periodic save job."""
