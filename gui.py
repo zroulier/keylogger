@@ -40,6 +40,8 @@ def open_settings():
     settings_popup.geometry("400x300")
     settings_popup.title("Settings")
 
+    settings_popup.grab_set()
+
     settings_label = ctk.CTkLabel(
         settings_popup,
         text="Settings Page",
