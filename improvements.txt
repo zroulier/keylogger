@@ -3,7 +3,8 @@
 -*** Create a pop-up window that shows live session stats, which auto update every 5 seconds
 - Create a sophisticated trends sheet using matplotlib and other libraries
 - Create a variable to change background refresh rate
-- Restructure app so that gui and functions are separate *** CURRENT TASK ***
+- Clean up keylogger_app.py file
+- Clean up GUI
 
 - Create a settings gui:
     - Make the app appearance dynamic for light, dark, and system

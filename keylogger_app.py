@@ -10,6 +10,7 @@ import platform
 import subprocess
 import customtkinter as ctk
 from tkinter import filedialog, messagebox
+from datetime import datetime, timedelta
 
 # Ensure NLTK word list is downloaded
 nltk.download('words')
@@ -32,8 +33,12 @@ class KeyloggerApp:
         self.running_text_job = None
         self.running_text_index = 0
         self.live_stats_popup = None
-        self.live_stats_label_popup = None
+        self.live_status_label_popup = None
         self.running_live_stats_job = None
+        self.elapsed_time = timedelta(0)
+        self.start_time = None
+        self.time_elapsed_label = None
+        self.stopwatch_running = False
 
     def load_existing_data(self):
         if os.path.exists(self.filename):
@@ -134,6 +139,8 @@ class KeyloggerApp:
             self.listener = Listener(on_press=self.on_press, on_release=self.on_release)
             self.listener.start()
 
+
+
     def stop_logging(self):
         """Stop the logging process."""
         if self.is_logging:
@@ -211,17 +218,49 @@ class KeyloggerApp:
 
     def update_running_text(self, running_label, app):
         """Update the 'Running...' label periodically."""
-        running_states = ["Running.", "Running..", "Running..."]
+        running_states = ["Running. | Press ESC Key to Stop", "Running.. | Press ESC Key to Stop", "Running... | Press ESC Key to Stop"]
         self.running_text_index = (self.running_text_index + 1) % 3
         running_label.configure(text=running_states[self.running_text_index])
-        self.running_text_job = app.after(500, lambda: self.update_running_text(running_label, app))
+        self.running_text_job = app.after(1000, lambda: self.update_running_text(running_label, app))
 
     def stop_running_text(self, running_label, app):
         """Stop the running text animation."""
         if self.running_text_job is not None:
             app.after_cancel(self.running_text_job)
             self.running_text_job = None
-        running_label.configure(text="")
+        running_label.configure(text='Key Logging Has Stopped. Resume Program to Continue Tracking', text_color='green')
+        app.after(5000, lambda: running_label.configure(text=''))
+
+    def start_stopwatch(self, time_elapsed_label):
+        self.elapsed_time = timedelta(0)
+        self.start_time = datetime.now()
+        self.time_elapsed_label = time_elapsed_label
+        self.stopwatch_running = True
+        self.update_stopwatch()
+    
+    def update_stopwatch(self):
+        if self.stopwatch_running:
+            self.elapsed_time = datetime.now() - self.start_time
+            time_str = self.format_time(self.elapsed_time)
+            self.time_elapsed_label.configure(text=f'Session Time: {time_str}', text_color='white')
+            self.time_elapsed_label.after(1000, self.update_stopwatch)
+
+    def stop_stopwatch(self, time_elapsed_label, app):
+        self.stopwatch_running = False
+        time_elapsed_label.configure(text_color='#FF4C4C')
+        
+        def clear_label():
+            time_elapsed_label.configure(text='') 
+
+        app.after(5000, clear_label)
+
+    def format_time(self, delta):
+        """Formats a timedelta object into a HH:MM:SS string."""
+        seconds = int(delta.total_seconds())
+        hours, remainder = divmod(seconds, 3600)
+        minutes, seconds = divmod(remainder, 60)
+        return f"{hours:02}:{minutes:02}:{seconds:02}"
+
 
     def periodic_save_json(self, app):
         """Periodically save key log data to JSON to prevent data loss."""
@@ -238,8 +277,8 @@ class KeyloggerApp:
             self.live_stats_popup.geometry("400x500")
             self.live_stats_popup.title("Live Session Stats")
 
-            self.live_stats_label_popup = ctk.CTkLabel(self.live_stats_popup, text="", text_color='white', font=("Open Sans", 14), justify='left', anchor='w', wraplength=380)
-            self.live_stats_label_popup.pack(pady=20)
+            self.live_status_label_popup = ctk.CTkLabel(self.live_stats_popup, text="", text_color='white', font=("Open Sans", 14), justify='left', anchor='w', wraplength=380)
+            self.live_status_label_popup.pack(pady=20)
 
             self.live_stats_popup.protocol("WM_DELETE_WINDOW", self.stop_live_stats_update)
 
@@ -252,7 +291,7 @@ class KeyloggerApp:
         live_stats_text += "\n\nWords:\n"
         live_stats_text += "\n".join([f"{word}: {count}" for word, count in self.session_log.get("words", {}).items()])
 
-        self.live_stats_label_popup.configure(text=live_stats_text)
+        self.live_status_label_popup.configure(text=live_stats_text)
         self.running_live_stats_job = app.after(5000, self.show_live_stats)
 
     def stop_live_stats_update(self, app):
@@ -317,7 +356,7 @@ class KeyloggerApp:
                     csv_writer.writerow([key, value])
             print(f"CSV saved at {file_path}")
 
-    def confirm_reset(self, app, stats_label):
+    def confirm_reset(self, app):
         confirm_window = ctk.CTkToplevel(app)
         confirm_window.geometry("300x150")
         confirm_window.title("Confirm Reset")
@@ -325,21 +364,21 @@ class KeyloggerApp:
         confirm_window.focus_force()
         confirm_window.grab_set()
 
-        label = ctk.CTkLabel(confirm_window, text="This will delete ALL history of keystrokes. Are you sure you want to continue?", wraplength=175, font=('Open Sans', 16, 'bold'))
+        label = ctk.CTkLabel(confirm_window, text="Are you sure you want to continue? This action cannot be reversed", wraplength=175, font=('Open Sans', 16, 'bold'))
         label.pack(pady=10)
 
-        yes_button = ctk.CTkButton(confirm_window, text="Yes", fg_color='#FF4C4C', command=lambda: self.reset_and_close(confirm_window, stats_label))
+        yes_button = ctk.CTkButton(confirm_window, text="Delete All History", fg_color='#FF4C4C', command=lambda: self.reset_and_close(confirm_window))
         yes_button.pack(side="left", padx=10, pady=10)
 
-        no_button = ctk.CTkButton(confirm_window, text="No", fg_color='#4C9FFF', command=confirm_window.destroy)
+        no_button = ctk.CTkButton(confirm_window, text="Cancel", fg_color='#4C9FFF', command=confirm_window.destroy)
         no_button.pack(side="right", padx=10, pady=10)
 
-    def reset_and_close(self, window, stats_label):
+    def reset_and_close(self, window):
         self.reset_data()
+        messagebox.showinfo("Confirmation", "Your data has been erased successfully. This action cannot be undone")
         window.destroy()
-        stats_label.configure(text="Data reset successfully.")
 
-    def start_logging_event(self, stats_label, running_label, app):
+    def start_logging_event(self, running_label, time_elapsed_label, app):
         """Start logging keystrokes and reset session log."""
         self.key_log = {}
         self.session_log = {
@@ -348,12 +387,12 @@ class KeyloggerApp:
             "other": {},
             "words": {}
         }
-        stats_label.configure(text="Logging keystrokes... Press ESC to stop.")
         self.start_logging()
         self.update_running_text(running_label, app)
+        self.start_stopwatch(time_elapsed_label)
         self.periodic_save_json(app)  # Start periodic saving
 
-    def stop_logging_event(self, stats_label, running_label, app):
+    def stop_logging_event(self, running_label, time_elapsed_label, app):
         """Stop logging keystrokes and cancel the periodic save job."""
         self.stop_logging()
 
@@ -362,10 +401,9 @@ class KeyloggerApp:
             app.after_cancel(self.periodic_save_job)
             self.periodic_save_job = None
 
-        stats_label.configure(text="Keystrokes saved! Click 'Show Trends' to see the stats.")
         self.stop_running_text(running_label, app)
+        self.stop_stopwatch(time_elapsed_label, app)
 
-    def show_trends_event(self, stats_label):
+    def show_trends_event(self):
         """Display trends for the session."""
         trends = self.get_trends()  # Assuming you have a get_trends method
-        stats_label.configure(text=f"Keystroke Trends:\n{trends}")

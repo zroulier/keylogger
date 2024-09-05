@@ -5,8 +5,9 @@ from keylogger_app import KeyloggerApp
 # Initiate KeyLogger Functions 
 keylogger_app = KeyloggerApp()
 
+# Initiate Application
 ctk.set_appearance_mode('dark')
-app = ctk.CTk()  # This is the main Tkinter application instance
+app = ctk.CTk()
 
 # Window Configuration
 app_width=500
@@ -24,33 +25,48 @@ keylogger_app.load_existing_data()
 
 # Button Functions
 def start_logging():
-    keylogger_app.start_logging_event(stats_label, running_label, app)
+    keylogger_app.start_logging_event(running_label, time_elapsed_label, app)
 
 def stop_logging():
-    keylogger_app.stop_logging_event(stats_label, running_label, app)
+    keylogger_app.stop_logging_event(running_label, time_elapsed_label, app)
 
-def show_trends():
-    keylogger_app.show_trends_event(stats_label)
+# def show_trends():
+#     keylogger_app.show_trends_event()
 
 # Window Frames
-buffer_frame = ctk.CTkFrame(app, fg_color="#242424", height=0) # Change height to change space between title and top of window
-buffer_frame.pack(pady=(0), anchor='center')
-
 title_frame = ctk.CTkFrame(app, fg_color="#242424")
-title_frame.pack(pady=10, anchor='center')
+title_frame.pack(pady=0, anchor='center')
 
-start_frame = ctk.CTkFrame(app, fg_color="#242424")
-start_frame.pack(pady=10, anchor='center')
+buttons_frame = ctk.CTkFrame(app, fg_color="#2E2E2E", corner_radius=50)
+buttons_frame.pack(anchor='center', expand=True, padx=10, pady=(25,0))
+buttons_frame.configure(border_color='white', border_width=2)
 
-trends_frame = ctk.CTkFrame(app, fg_color="#242424")
-trends_frame.pack(pady=(0, 0), fill='x', expand=True)
+start_frame = ctk.CTkFrame(buttons_frame)
+start_frame.pack(pady=(15,20), padx=20, anchor='center', expand=True)
 
-bottom_frame = ctk.CTkFrame(app, fg_color="#242424")
-bottom_frame.pack(pady=(90, 0), fill='x', expand=True)
+trends_frame = ctk.CTkFrame(buttons_frame)
+trends_frame.pack(pady=0, padx=10, anchor='center', expand=True)
+
+sessions_frame = ctk.CTkFrame(buttons_frame)
+sessions_frame.pack(pady=(20,15), padx=10, anchor='center', expand=True)
+
+time_frame = ctk.CTkFrame(app, bg_color='#2e2e2e')
+time_frame.pack(pady=(0,0))
+
+bottom_frame = ctk.CTkFrame(app, bg_color='#2e2e2e')
+bottom_frame.pack(pady=(75, 0), anchor='center', fill='x', expand=True)
 
 # Window UI Elements
+time_elapsed_label = ctk.CTkLabel(
+    time_frame,
+    text='',
+    text_color='white',
+    bg_color='#242424',
+    font=("Open Sans", 14))
+time_elapsed_label.pack()
+
 running_label = ctk.CTkLabel(
-    app, 
+    title_frame, 
     text="", 
     text_color='green', 
     font=("Open Sans", 14))
@@ -61,7 +77,7 @@ app_title = ctk.CTkLabel(
     text="Keystroke Logger Tool", 
     text_color='white', 
     font=("Open Sans", 35, 'bold'))
-app_title.pack(pady=(0,0), anchor='n')
+app_title.pack(anchor='n')
 
 app_desc = ctk.CTkLabel(
     title_frame, 
@@ -72,57 +88,58 @@ app_desc = ctk.CTkLabel(
     wraplength=350)
 app_desc.pack(pady=(20,0))
 
-stats_label = ctk.CTkLabel(
-    title_frame, 
-    text="", 
-    text_color='white', 
-    font=("Open Sans", 18, 'bold'), 
-    wraplength=500)
-stats_label.pack(pady=20)
-
 start_button = ctk.CTkButton(
     start_frame, 
     text="Start Logging", 
-    fg_color='#4C9FFF', 
+    fg_color='#4C9FFF',
+    bg_color='#2e2e2e',
     font=('Open Sans Bold', 20), 
     text_color='white', 
-    width=200, 
-    height=100, 
+    width=150, 
+    height=75,
+    corner_radius=25, 
     command=start_logging)
-start_button.pack(side='left', pady=10)
+start_button.pack(side='left', padx=(5,5))
 
 stop_button = ctk.CTkButton(
     start_frame, 
     text="Stop Logging", 
-    fg_color='#4C9FFF', 
+    fg_color='#4C9FFF',
+    bg_color='#2e2e2e', 
     font=('Open Sans Bold', 20), 
     text_color='white', 
-    width=200, 
-    height=100, 
+    width=150, 
+    height=75,
+    corner_radius=25, 
     command=stop_logging)
-stop_button.pack(side='left', padx=10)
+stop_button.pack(side='left', padx=(5,5))
 
 trends_button = ctk.CTkButton(
     trends_frame, 
     text="Show Trends", 
-    fg_color='#4C9FFF', 
+    fg_color='#4C9FFF',
+    bg_color='#2e2e2e', 
     font=('Open Sans Bold', 20), 
     text_color='white', 
-    width=410, 
-    height=70, 
-    command=show_trends)
-trends_button.pack(pady=(0, 0), anchor='center')
+    width=355, 
+    height=70,
+    corner_radius=25, 
+    command=None)
+trends_button.pack(anchor='center')
 
 live_stats_button = ctk.CTkButton(
-    trends_frame, 
+    sessions_frame, 
     text="Live Session Stats", 
-    fg_color='#4C9FFF', 
+    fg_color='#4C9FFF',
+    bg_color='#2e2e2e', 
     font=('Open Sans Bold', 20), 
     text_color='white', 
-    width=410, 
-    height=70, 
+    width=355, 
+    height=70,
+    corner_radius=25, 
     command=lambda: keylogger_app.show_live_stats(app))
-live_stats_button.pack(pady=(10, 0), anchor='center')
+live_stats_button.pack(anchor='center')
+
 
 reset_button = ctk.CTkButton(
     bottom_frame, 
@@ -132,7 +149,7 @@ reset_button = ctk.CTkButton(
     text_color='white', 
     width=50, 
     height=40, 
-    command=lambda: keylogger_app.confirm_reset(app, stats_label))
+    command=lambda: keylogger_app.confirm_reset(app))
 reset_button.pack(side='right')
 
 export_button = ctk.CTkButton(
