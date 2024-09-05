@@ -1,3 +1,2 @@
-# JSON File
-key_log_counts.json
+*.json
 __pycache__/

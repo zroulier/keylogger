@@ -40,28 +40,73 @@ class KeyloggerApp:
         self.start_time = None
         self.time_elapsed_label = None
         self.stopwatch_running = False
+        self.hotkey_combination = '<ctrl>+<shift>+p'
+        self.hotkey_file = 'hotkey_config.json'  # File to store the hotkey
         self.hotkey_listener = None
         self.key_controller = Controller()
+        self.new_hotkey_listener = None
+        self.new_hotkey_keys = []
 
+        self.load_hotkey()
+
+    def load_hotkey(self):
+        """Load the hotkey combination from the JSON file."""
+        if os.path.exists(self.hotkey_file):
+            with open(self.hotkey_file, 'r') as f:
+                data = json.load(f)
+                self.hotkey_combination = data.get('hotkey', self.hotkey_combination)  # Use default if not found
+        else:
+            print("No hotkey config file found, using default hotkey.")
+
+    def save_hotkey(self):
+        """Save the hotkey combination to the JSON file."""
+        try:
+            print(f"Saving hotkey to {self.hotkey_file}")  # Debugging print statement
+            with open(self.hotkey_file, 'w') as f:
+                json.dump({'hotkey': self.hotkey_combination}, f)
+            print(f"Hotkey saved: {self.hotkey_combination}")
+        except Exception as e:
+            print(f"Error saving hotkey: {e}")
+
+    def key_to_string(self, key):
+        """Convert raw key names to a format that HotKey.parse() can use."""
+        key_map = {
+            'Key.ctrl_l': '<ctrl>',
+            'Key.ctrl_r': '<ctrl>',
+            'Key.shift': '<shift>',
+            'Key.shift_r': '<shift>',
+            'Key.alt_l': '<alt>',
+            'Key.alt_r': '<alt>',
+            'Key.cmd': '<cmd>',
+            'Key.cmd_r': '<cmd>'
+        }
+        if hasattr(key, 'char') and key.char is not None:
+            return key.char  # Return the character itself
+        key_str = str(key)
+        return key_map.get(key_str, key_str)  # Return mapped key or the original if not found
 
     def start_hotkey_listener(self, app):
-        """Start a listener to capture the Ctrl+Shift+P key combo and toggle the window."""
+        """Start a listener to capture the hotkey combination and toggle the window."""
         def on_activate():
             if app.state() == 'withdrawn':
-                print("Ctrl+Shift+P pressed - Showing the app window")
+                print(f"{self.hotkey_combination} pressed - Showing the app window")
                 app.deiconify()  # Show the app window again
             else:
-                print("Ctrl+Shift+P pressed - Hiding the app window")
+                print(f"{self.hotkey_combination} pressed - Hiding the app window")
                 app.withdraw()  # Hide the app window
 
-        # Define the hotkey (Ctrl+Shift+P)
+        # Define the hotkey (from self.hotkey_combination)
         hotkey = keyboard.HotKey(
-            keyboard.HotKey.parse('<ctrl>+<shift>+p'),
+            keyboard.HotKey.parse(self.hotkey_combination),
             on_activate
         )
 
         def for_canonical(f):
             return lambda k: f(self.hotkey_listener.canonical(k))
+
+        # Stop any existing listener before starting a new one
+        if self.hotkey_listener is not None:
+            self.hotkey_listener.stop()
 
         # Create and start the keyboard listener
         self.hotkey_listener = keyboard.Listener(
@@ -70,6 +115,33 @@ class KeyloggerApp:
         )
         self.hotkey_listener.start()
 
+    def listen_for_new_hotkey(self, callback):
+        """Start listening for a new hotkey combination."""
+        self.new_hotkey_keys = []
+
+        def on_press(key):
+            key_str = self.key_to_string(key)
+            if key_str not in self.new_hotkey_keys:
+                self.new_hotkey_keys.append(key_str)
+
+        def on_release(key):
+            # When all keys are released, register the hotkey
+            new_hotkey_combination = '+'.join(self.new_hotkey_keys)
+            print(f"New hotkey captured: {new_hotkey_combination}")
+            callback(new_hotkey_combination)  # Pass the combination back
+            self.new_hotkey_listener.stop()
+            return False  # Stop listener after capturing hotkey
+
+        # Start the listener to capture the keys
+        self.new_hotkey_listener = keyboard.Listener(on_press=on_press, on_release=on_release)
+        self.new_hotkey_listener.start()
+
+    def update_hotkey_combination(self, new_combination, app):
+        """Update the hotkey combination and restart the listener with the new combination."""
+        print(f"Updating hotkey to: {new_combination}")
+        self.hotkey_combination = new_combination
+        self.save_hotkey()
+        self.start_hotkey_listener(app)  # Restart the listener with the new combination
     def stop_hotkey_listener(self):
         if self.hotkey_listener:
             self.hotkey_listener.stop()
@@ -251,7 +323,7 @@ class KeyloggerApp:
         self.save_to_json()
 
     def update_running_text(self, running_label, app):
-        running_states = ["Running. | Press Ctrl+Shift+P to Toggle Window", "Running.. | Press Ctrl+Shift+P to Toggle Window", "Running... | Press Ctrl+Shift+P to Toggle Window"]
+        running_states = [f"Running. | Press {self.hotkey_combination} to Toggle Window", f"Running.. | Press {self.hotkey_combination} to Toggle Window", f"Running... | Press {self.hotkey_combination} to Toggle Window"]
         self.running_text_index = (self.running_text_index + 1) % 3
         running_label.configure(text=running_states[self.running_text_index])
         self.running_text_job = app.after(1000, lambda: self.update_running_text(running_label, app))
