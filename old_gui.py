@@ -1,7 +1,7 @@
 # Import Libraries
 import customtkinter as ctk
 from tkinter import messagebox
-from keylogger_app import KeyloggerApp
+from old_keylogger_app import KeyloggerApp
 
 # Initiate KeyLogger Functions 
 keylogger_app = KeyloggerApp()
